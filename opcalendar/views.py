@@ -8,6 +8,7 @@ from allianceauth.services.hooks import get_extension_logger
 from django.contrib import messages
 from django.urls import reverse
 
+from django.views.generic.base import View
 from django.views.generic import ListView
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, HttpResponseRedirect
@@ -138,17 +139,37 @@ class CalendarView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         user = self.request.user
+        local_times = self.request.session['local_times']
         # user_permissions = self.request.user.has_perm('app.get_main_view')
         context = super().get_context_data(**kwargs)
         d = get_date(self.request.GET.get("month", None))
-        cal = Calendar(d.year, d.month, user)
+        cal = Calendar(d.year, d.month, user, local_times)
         html_cal = cal.formatmonth(withyear=True)
+        context["local_times"] = local_times
         context["category"] = EventCategory.objects.all()
         context["visibility"] = EventVisibility.objects.all()
         context["calendar"] = mark_safe(html_cal)
         context["prev_month"] = prev_month(d)
         context["next_month"] = next_month(d)
         return context
+
+class CalendarLocalTimesView(View):
+    SESSION_VAR = "local_times"
+
+    def get(self, request, *args, **kwargs):
+        request.session[self.SESSION_VAR] = not self.localtimes_mode_state(request)
+        return HttpResponseRedirect(request.GET.get("next", "/"))
+
+    @classmethod
+    def localtimes_mode_state(cls, request):
+        try:
+            return request.session.get(cls.SESSION_VAR, False)
+        except AttributeError:
+            # Session is middleware
+            # Sometimes request wont have a session attribute
+            return False
+
+
 
 
 @login_required

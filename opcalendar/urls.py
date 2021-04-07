@@ -1,4 +1,5 @@
 from django.urls import path
+from django.conf.urls import url
 
 from . import views
 
@@ -26,4 +27,5 @@ urlpatterns = [
         views.EventMemberRemove,
         name="event_member_remove",
     ),
+    url(r'^localtimes/', views.CalendarLocalTimesView.as_view(), name='localtimes'),
 ]

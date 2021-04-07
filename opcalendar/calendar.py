@@ -6,7 +6,7 @@ from datetime import datetime
 from django.db.models import Q, F
 from django.utils import timezone
 from allianceauth.services.hooks import get_extension_logger
-
+from django.template import defaultfilters
 from .models import Event, IngameEvents
 from .app_settings import (
     OPCALENDAR_DISPLAY_STRUCTURETIMERS,
@@ -21,10 +21,11 @@ logger = get_extension_logger(__name__)
 
 
 class Calendar(HTMLCalendar):
-    def __init__(self, year=None, month=None, user=None):
+    def __init__(self, year=None, month=None, user=None, local_times=False):
         self.year = year
         self.month = month
         self.user = user
+        self.local_times = local_times
         super(Calendar, self).__init__()
 
     # formats a day as a td
@@ -53,7 +54,7 @@ class Calendar(HTMLCalendar):
                     d += (
                         f"<style>{event.get_event_styling}</style>"
                         f'<a class="nostyling" href="{event.get_html_url}">'
-                        f'<div class="event {event.get_date_status} {event.get_visibility_class} {event.get_category_class}">{event.get_html_title}</div>'
+                        f'<div class="event {event.get_date_status} {event.get_visibility_class} {event.get_category_class}">{ defaultfilters.date(event.start_time)}{event.get_html_title}</div>'
                         f"</a>"
                     )
                 if type(event).__name__ == "Timer":

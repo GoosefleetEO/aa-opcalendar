@@ -8,7 +8,7 @@
 {% block content %}
 <div class="allianceauth-opcalendar">
     <div class="clearfix">
-    	<a class="btn btn-info right mr-2" href="{% url 'opcalendar:calendar' %}?{{ next_month }} "> Next Month >> </a>
+        <a class="btn btn-info right mr-2" href="{% url 'opcalendar:calendar' %}?{{ next_month }} "> Next Month >> </a>
         <a class="btn btn-info right mr-2" href="{% url 'opcalendar:calendar' %}?{{ prev_month }}"> << Previous Month </a>
             {% if perms.opcalendar.create_event %}
         	<a class="btn btn-info right mr-2" href="{% url 'opcalendar:event_new' %}"> + New Event </a>
@@ -18,6 +18,9 @@
             {% translate "Add Ingame Calendar Feed" %}
             </a>
         {% endif %}
+        <a class="btn btn-info right mr-2" href="{% url 'opcalendar:localtimes' %}?next={{ request.path|urlencode }}">
+            Display local times<i class="fas {% if local_times %}fa-toggle-on{% else %}fa-toggle-off{% endif %}" aria-hidden="true"></i>
+        </a>
         <h5>Legend & Filters:</h5>
         <div class="legend">
             <div>
@@ -36,6 +39,7 @@
 </div>
 <div>
     <div class="allianceauth-opcalendar">
+        {{ local_times }}
         {{ calendar }}
     </div>
 </div>
