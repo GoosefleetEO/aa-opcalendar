@@ -31,7 +31,7 @@ class Calendar(HTMLCalendar):
         self.year = year
         self.month = month
         self.user = user
-        super(Calendar, self).__init__()
+        super(Calendar, self).__init__(firstweekday=6)
 
     # formats a day as a td
     # filter events by day
