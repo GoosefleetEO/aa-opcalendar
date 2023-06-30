@@ -2,8 +2,9 @@ import json
 from pathlib import Path
 
 from bravado.exception import HTTPNotFound
-from django.utils.dateparse import parse_datetime
 from ics import Calendar, Event
+
+from django.utils.dateparse import parse_datetime
 
 from ..utils import BravadoOperationStub, BravadoResponseStub
 
@@ -25,13 +26,13 @@ def generate_ical_string(key: str) -> str:
     for row in _testdata["iCalendar"].get(key, []):
         c.events.add(
             Event(
-                name=row["name"],
+                name=row.get("name"),
                 begin=row["begin"],
                 end=row["end"],
                 description=row["description"],
             )
         )
-    return str(c)
+    return c.serialize()
 
 
 class FeedsStub:

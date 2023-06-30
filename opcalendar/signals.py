@@ -63,7 +63,6 @@ def fleet_saved(sender, instance, created, **kwargs):
 
             # Setup portrait URL based on owner type
             if instance.owner_type == "alliance":
-
                 portrait = "https://images.evetech.net/alliances/%s/logo" % entity_id
 
                 ticker = "[{}]".format(
@@ -73,7 +72,6 @@ def fleet_saved(sender, instance, created, **kwargs):
                 )
 
             if instance.owner_type == "corporation":
-
                 portrait = "https://images.evetech.net/corporations/%s/logo" % entity_id
 
                 ticker = "[{}]".format(
@@ -83,7 +81,6 @@ def fleet_saved(sender, instance, created, **kwargs):
                 )
 
             if instance.owner_type == "character":
-
                 portrait = (
                     "https://images.evetech.net/characters/%s/portrait" % entity_id
                 )
@@ -123,14 +120,13 @@ def fleet_saved(sender, instance, created, **kwargs):
 
             old = datetime.datetime.now(timezone.utc) > eve_time
 
-            if hook.webhook:
-                if hook.webhook.enabled:
-                    if old and hook.ignore_past_fleets:
-                        logger.debug("Event is in the past, not sending webhook.")
-                    hook.webhook.send_embed(embed)
+            if hook and hook.webhook and hook.webhook.enabled:
+                if old and hook.ignore_past_fleets:
+                    logger.debug("Event is in the past, not sending webhook.")
+                hook.webhook.send_embed(embed)
 
         except Exception as e:
-            logger.error(e)
+            logger.exception(e)
             pass  # shits fucked... Don't worry about it...
 
     # For Normal Events
@@ -146,19 +142,21 @@ def fleet_saved(sender, instance, created, **kwargs):
 
                 message = "New event: %s" % title
 
-                main_char = instance.eve_character
-
                 formup_system = instance.formup_system
 
                 eve_time = instance.start_time
 
                 fc = instance.fc
 
-                portrait = main_char.portrait_url_64
-
-                character_name = main_char.character_name
-
-                ticker = "[{}]".format(main_char.corporation_ticker)
+                main_char = instance.eve_character
+                if main_char:
+                    portrait = main_char.portrait_url_64
+                    character_name = main_char.character_name
+                    ticker = "[{}]".format(main_char.corporation_ticker)
+                else:
+                    portrait = ""
+                    character_name = ""
+                    ticker = ""
 
                 # If we update instead of delete
                 if not created:
@@ -195,14 +193,13 @@ def fleet_saved(sender, instance, created, **kwargs):
 
                 old = datetime.datetime.now(timezone.utc) > eve_time
 
-                if hook.webhook:
-                    if hook.webhook.enabled:
-                        if old and hook.ignore_past_fleets:
-                            logger.debug("Event is in the past, not sending webhook.")
-                        hook.webhook.send_embed(embed)
+                if hook and hook.webhook and hook.webhook.enabled:
+                    if old and hook.ignore_past_fleets:
+                        logger.debug("Event is in the past, not sending webhook.")
+                    hook.webhook.send_embed(embed)
 
             except Exception as e:
-                logger.error(e)
+                logger.exception(e)
                 pass  # shits fucked... Don't worry about it...
 
         # For automated fleets like NPSI imported fleets. Only post if OPCALENDAR_NOTIFY_IMPORTS set to True
@@ -216,19 +213,21 @@ def fleet_saved(sender, instance, created, **kwargs):
 
                 message = "New NPSI event from API: %s" % title
 
-                main_char = instance.eve_character
-
                 formup_system = instance.formup_system
 
                 eve_time = instance.start_time
 
                 fc = instance.fc
 
-                portrait = main_char.portrait_url_64
-
-                character_name = main_char.character_name
-
-                ticker = "[{}]".format(main_char.corporation_ticker)
+                main_char = instance.eve_character
+                if main_char:
+                    portrait = main_char.portrait_url_64
+                    character_name = main_char.character_name
+                    ticker = "[{}]".format(main_char.corporation_ticker)
+                else:
+                    portrait = ""
+                    character_name = ""
+                    ticker = ""
 
                 # If we update instead of delete
                 if not created:
@@ -265,21 +264,19 @@ def fleet_saved(sender, instance, created, **kwargs):
 
                 old = datetime.datetime.now(timezone.utc) > eve_time
 
-                if hook.webhook:
-                    if hook.webhook.enabled:
-                        if old and hook.ignore_past_fleets:
-                            logger.debug("Event is in the past, not sending webhook.")
-                        hook.webhook.send_embed(embed)
+                if hook and hook.webhook and hook.webhook.enabled:
+                    if old and hook.ignore_past_fleets:
+                        logger.debug("Event is in the past, not sending webhook.")
+                    hook.webhook.send_embed(embed)
 
             except Exception as e:
-                logger.error(e)
+                logger.exception(e)
                 pass  # shits fucked... Don't worry about it...
 
 
 @receiver(pre_delete, sender=Event)
 @receiver(pre_delete, sender=IngameEvents)
 def fleet_deleted(sender, instance, **kwargs):
-
     # Ingame Calendar Event
     if sender == IngameEvents and OPCALENDAR_NOTIFY_IMPORTS:
         try:
@@ -317,7 +314,6 @@ def fleet_deleted(sender, instance, **kwargs):
 
             # Setup portrait URL based on owner type
             if instance.owner_type == "alliance":
-
                 portrait = "https://images.evetech.net/alliances/%s/logo" % entity_id
 
                 ticker = "[{}]".format(
@@ -327,7 +323,6 @@ def fleet_deleted(sender, instance, **kwargs):
                 )
 
             if instance.owner_type == "corporation":
-
                 portrait = "https://images.evetech.net/corporations/%s/logo" % entity_id
 
                 ticker = "[{}]".format(
@@ -337,7 +332,6 @@ def fleet_deleted(sender, instance, **kwargs):
                 )
 
             if instance.owner_type == "character":
-
                 portrait = (
                     "https://images.evetech.net/characters/%s/portrait" % entity_id
                 )
@@ -370,14 +364,13 @@ def fleet_deleted(sender, instance, **kwargs):
 
             old = datetime.datetime.now(timezone.utc) > eve_time
 
-            if hook.webhook:
-                if hook.webhook.enabled:
-                    if old and hook.ignore_past_fleets:
-                        logger.debug("Event is in the past, not sending webhook.")
-                    hook.webhook.send_embed(embed)
+            if hook and hook.webhook and hook.webhook.enabled:
+                if old and hook.ignore_past_fleets:
+                    logger.debug("Event is in the past, not sending webhook.")
+                hook.webhook.send_embed(embed)
 
         except Exception as e:
-            logger.error(e)
+            logger.exception(e)
             pass  # shits fucked... Don't worry about it...
 
     # For Normal Events
@@ -393,19 +386,21 @@ def fleet_deleted(sender, instance, **kwargs):
 
                 message = "Event deleted: %s" % title
 
-                main_char = instance.eve_character
-
                 formup_system = instance.formup_system
 
                 eve_time = instance.start_time
 
                 fc = instance.fc
 
-                portrait = main_char.portrait_url_64
-
-                character_name = main_char.character_name
-
-                ticker = "[{}]".format(main_char.corporation_ticker)
+                main_char = instance.eve_character
+                if main_char:
+                    portrait = main_char.portrait_url_64
+                    character_name = main_char.character_name
+                    ticker = "[{}]".format(main_char.corporation_ticker)
+                else:
+                    portrait = ""
+                    character_name = ""
+                    ticker = ""
 
                 col = RED
 
@@ -438,14 +433,13 @@ def fleet_deleted(sender, instance, **kwargs):
 
                 old = datetime.datetime.now(timezone.utc) > eve_time
 
-                if hook.webhook:
-                    if hook.webhook.enabled:
-                        if old and hook.ignore_past_fleets:
-                            logger.debug("Event is in the past, not sending webhook.")
-                        hook.webhook.send_embed(embed)
+                if hook and hook.webhook and hook.webhook.enabled:
+                    if old and hook.ignore_past_fleets:
+                        logger.debug("Event is in the past, not sending webhook.")
+                    hook.webhook.send_embed(embed)
 
             except Exception as e:
-                logger.error(e)
+                logger.exception(e)
                 pass  # shits fucked... Don't worry about it...
 
         # For automated fleets like NPSI imported fleets. Only post if OPCALENDAR_NOTIFY_IMPORTS set to True
@@ -459,19 +453,21 @@ def fleet_deleted(sender, instance, **kwargs):
 
                 message = "NPSI event deleted from API: %s" % title
 
-                main_char = instance.eve_character
-
                 formup_system = instance.formup_system
 
                 eve_time = instance.start_time
 
                 fc = instance.fc
 
-                portrait = main_char.portrait_url_64
-
-                character_name = main_char.character_name
-
-                ticker = "[{}]".format(main_char.corporation_ticker)
+                main_char = instance.eve_character
+                if main_char:
+                    portrait = main_char.portrait_url_64
+                    character_name = main_char.character_name
+                    ticker = "[{}]".format(main_char.corporation_ticker)
+                else:
+                    portrait = ""
+                    character_name = ""
+                    ticker = ""
 
                 col = RED
 
@@ -498,12 +494,11 @@ def fleet_deleted(sender, instance, **kwargs):
 
                 old = datetime.datetime.now(timezone.utc) > eve_time
 
-                if hook.webhook:
-                    if hook.webhook.enabled:
-                        if old and hook.ignore_past_fleets:
-                            logger.debug("Event is in the past, not sending webhook.")
-                        hook.webhook.send_embed(embed)
+                if hook and hook.webhook and hook.webhook.enabled:
+                    if old and hook.ignore_past_fleets:
+                        logger.debug("Event is in the past, not sending webhook.")
+                    hook.webhook.send_embed(embed)
 
             except Exception as e:
-                logger.error(e)
+                logger.exception(e)
                 pass  # shits fucked... Don't worry about it...

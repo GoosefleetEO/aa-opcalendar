@@ -1,30 +1,30 @@
-from datetime import datetime
 import re
+from datetime import datetime
 
-from bravado.exception import HTTPBadGateway, HTTPGatewayTimeout, HTTPServiceUnavailable
-from celery import shared_task
 import feedparser
-from ics import Calendar
-import requests
 import pytz
-from django.utils.html import strip_tags
+import requests
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
+from bravado.exception import HTTPBadGateway, HTTPGatewayTimeout, HTTPServiceUnavailable
+from celery import shared_task
+from django.utils.html import strip_tags
+from ics import Calendar
+from requests.exceptions import RequestException
 
 from .app_settings import (
-    OPCALENDAR_EVE_UNI_URL,
-    OPCALENDAR_SPECTRE_URL,
-    OPCALENDAR_FUNINC_URL,
-    OPCALENDAR_FRIDAY_YARRRR_URL,
-    OPCALENDAR_REDEMPTION_ROAD_URL,
     OPCALENDAR_CAS_URL,
-    OPCALENDAR_FWAMING_DWAGONS_URL,
-    OPCALENDAR_FREE_RANGE_CHIKUNS_URL,
     OPCALENDAR_EVE_LINKNET_URL,
+    OPCALENDAR_EVE_UNI_URL,
+    OPCALENDAR_FREE_RANGE_CHIKUNS_URL,
+    OPCALENDAR_FRIDAY_YARRRR_URL,
+    OPCALENDAR_FUNINC_URL,
+    OPCALENDAR_FWAMING_DWAGONS_URL,
+    OPCALENDAR_REDEMPTION_ROAD_URL,
+    OPCALENDAR_SPECTRE_URL,
+    OPCALENDAR_TASKS_TIME_LIMIT,
 )
-from .app_settings import OPCALENDAR_TASKS_TIME_LIMIT
 from .models import Event, EventImport, Owner
-
 
 DEFAULT_TASK_PRIORITY = 6
 
@@ -65,66 +65,60 @@ def import_all_npsi_fleets() -> bool:
     # Get all import feeds
     feeds = EventImport.objects.all()
 
-    feed_errors = False
+    feed_errors = []
+    map_ical_imports = {
+        EventImport.FRIDAY_YARRRR: OPCALENDAR_FRIDAY_YARRRR_URL,
+        EventImport.REDEMPTION_ROAD: OPCALENDAR_REDEMPTION_ROAD_URL,
+        EventImport.CAS: OPCALENDAR_CAS_URL,
+        EventImport.FREE_RANGE_CHIKUNS: OPCALENDAR_FREE_RANGE_CHIKUNS_URL,
+        EventImport.EVE_LINKNET: OPCALENDAR_EVE_LINKNET_URL,
+        EventImport.FWAMING_DWAGONS: OPCALENDAR_FWAMING_DWAGONS_URL,
+    }
 
     # Check for active NPSI feeds
     for feed in feeds:
-
         # If Spectre Fleet is active
         if feed.source == EventImport.SPECTRE_FLEET:
-            feed_errors |= _import_spectre_fleet(feed, event_ids_to_remove)
+            has_error = _import_spectre_fleet(feed, event_ids_to_remove)
+            feed_errors.append(has_error)
 
         # Check for FUN Inc fleets
         if feed.source == EventImport.FUN_INC:
-            feed_errors |= _import_fun_inc(feed, event_ids_to_remove)
+            has_error = _import_fun_inc(feed, event_ids_to_remove)
+            feed_errors.append(has_error)
 
         # Check for EVE Uni events
         if feed.source == EventImport.EVE_UNIVERSITY:
-            feed_errors |= _import_eve_uni(feed, event_ids_to_remove)
+            has_error = _import_eve_uni(feed, event_ids_to_remove)
+            feed_errors.append(has_error)
 
-        # Check for events via SPECTRE ical feed
-        if feed.source == EventImport.FRIDAY_YARRRR:
-            feed_errors |= _import_ical(
-                feed, event_ids_to_remove, OPCALENDAR_FRIDAY_YARRRR_URL
-            )
-
-        if feed.source == EventImport.REDEMPTION_ROAD:
-            feed_errors |= _import_ical(
-                feed, event_ids_to_remove, OPCALENDAR_REDEMPTION_ROAD_URL
-            )
-
-        if feed.source == EventImport.CAS:
-            feed_errors |= _import_ical(feed, event_ids_to_remove, OPCALENDAR_CAS_URL)
-
-        if feed.source == EventImport.FWAMING_DWAGONS:
-            feed_errors |= _import_ical(
-                feed, event_ids_to_remove, OPCALENDAR_FWAMING_DWAGONS_URL
-            )
-
-        if feed.source == EventImport.FREE_RANGE_CHIKUNS:
-            feed_errors |= _import_ical(
-                feed, event_ids_to_remove, OPCALENDAR_FREE_RANGE_CHIKUNS_URL
-            )
-
-        if feed.source == EventImport.EVE_LINKNET:
-            feed_errors |= _import_ical(
-                feed, event_ids_to_remove, OPCALENDAR_EVE_LINKNET_URL
-            )
+        # Check for events from ical feeds
+        for source, url in map_ical_imports.items():
+            if feed.source == source:
+                has_error = _import_ical(feed, event_ids_to_remove, url)
+                feed_errors.append(has_error)
 
     logger.debug("Checking for NPSI fleets to be removed.")
 
-    if feed_errors:
+    successful_imports = feed_errors.count(False)
+    if successful_imports:
+        logger.info(
+            "Successfully imported %d / %d NPSI feeds.",
+            successful_imports,
+            len(feed_errors),
+        )
+
+    if any(feed_errors):
         logger.error("Errors in feeds, not cleaning up operations on this run")
         return False
 
+    if not event_ids_to_remove:
+        logger.debug("No NPSI fleets to be removed.")
     else:
-        if not event_ids_to_remove:
-            logger.debug("No NPSI fleets to be removed.")
-        else:
-            logger.debug("Removed unseen NPSI fleets")
-            # Remove all events we did not see from API
-            Event.objects.filter(pk__in=event_ids_to_remove).delete()
-        return True
+        logger.debug("Removed unseen NPSI fleets")
+        # Remove all events we did not see from API
+        Event.objects.filter(pk__in=event_ids_to_remove).delete()
+    return True
 
 
 def _import_spectre_fleet(feed, event_ids_to_remove):
@@ -135,19 +129,15 @@ def _import_spectre_fleet(feed, event_ids_to_remove):
     )
 
     try:
-
         # Get spectre fleets from their RSS feed
         d = feedparser.parse(OPCALENDAR_SPECTRE_URL)
 
         # Process each fleet entry
         for entry in d.entries:
-
             # Look for SF fleets only
             if entry.author_detail.name == "Spectre Fleet":
-
                 # Only active fleets
                 if "[RESERVED]" not in entry.title:
-
                     logger.debug("%s: Import even found: %s", feed, entry.title)
 
                     # Format datetimes
@@ -163,7 +153,6 @@ def _import_spectre_fleet(feed, event_ids_to_remove):
 
                     # If we get the event from API it should not be removed
                     if original:
-
                         logger.debug(
                             "%s: Event: %s already in database, skipping",
                             feed,
@@ -197,7 +186,7 @@ def _import_spectre_fleet(feed, event_ids_to_remove):
                             entry.title,
                         )
 
-    except Exception:
+    except (NotImplementedError, RequestException):
         logger.error("%s: Error in fetching fleets", feed, exc_info=True)
         return True
 
@@ -214,19 +203,20 @@ def _import_fun_inc(feed, event_ids_to_remove):
     try:
         # Get FUN Inc fleets from google ical
         r = requests.get(OPCALENDAR_FUNINC_URL)
+        r.raise_for_status()
+
         c = Calendar(r.text)
 
         # Parse each entry we got
         for entry in c.events:
-
             # Format datetime
-            start_date = datetime.utcfromtimestamp(entry.begin.timestamp).replace(
+            start_date = datetime.utcfromtimestamp(entry.begin.float_timestamp).replace(
                 tzinfo=pytz.utc
             )
-            end_date = datetime.utcfromtimestamp(entry.end.timestamp).replace(
+            end_date = datetime.utcfromtimestamp(entry.end.float_timestamp).replace(
                 tzinfo=pytz.utc
             )
-            title = entry.name
+            title = entry.name if entry.name else ""
 
             logger.debug("%s: Import even found: %s", feed, title)
 
@@ -235,7 +225,6 @@ def _import_fun_inc(feed, event_ids_to_remove):
 
             # If we get the event from API it should not be removed
             if original:
-
                 logger.debug("%s: Event: %s already in database, skipping", feed, title)
 
                 # Remove the found fleet from the to be removed list
@@ -263,7 +252,7 @@ def _import_fun_inc(feed, event_ids_to_remove):
 
                 event.save()
 
-    except Exception:
+    except (NotImplementedError, RequestException):
         logger.error("%s: Error in fetching fleets", feed, exc_info=True)
         return True
 
@@ -280,17 +269,17 @@ def _import_eve_uni(feed, event_ids_to_remove):
     try:
         # Get EVE Uni events from their API feed (ical)
         r = requests.get(OPCALENDAR_EVE_UNI_URL)
+        r.raise_for_status()
+
         c = Calendar(r.text)
         for entry in c.events:
-
             # Filter only class events as they are the only public events in eveuni
-            if "class" in entry.name.lower():
-
+            if entry.name and "class" in entry.name.lower():
                 # Format datetime
-                start_date = datetime.utcfromtimestamp(entry.begin.timestamp).replace(
-                    tzinfo=pytz.utc
-                )
-                end_date = datetime.utcfromtimestamp(entry.end.timestamp).replace(
+                start_date = datetime.utcfromtimestamp(
+                    entry.begin.float_timestamp
+                ).replace(tzinfo=pytz.utc)
+                end_date = datetime.utcfromtimestamp(entry.end.float_timestamp).replace(
                     tzinfo=pytz.utc
                 )
                 title = re.sub(r"[\(\[].*?[\)\]]", "", entry.name)
@@ -304,7 +293,6 @@ def _import_eve_uni(feed, event_ids_to_remove):
 
                 # If we get the event from API it should not be removed
                 if original:
-
                     logger.debug(
                         "%s: Event: %s already in database, skipping", feed, title
                     )
@@ -337,7 +325,7 @@ def _import_eve_uni(feed, event_ids_to_remove):
                     )
                     event.save()
 
-    except Exception:
+    except (NotImplementedError, RequestException):
         logger.error("%s: Error in fetching fleets", feed, exc_info=True)
         return True
 
@@ -354,17 +342,18 @@ def _import_ical(feed, event_ids_to_remove, url):
     try:
         # Get EVE Uni events from their API feed (ical)
         r = requests.get(url)
+        r.raise_for_status()
+
         c = Calendar(r.text)
         for entry in c.events:
-
             # Format datetime
-            start_date = datetime.utcfromtimestamp(entry.begin.timestamp).replace(
+            start_date = datetime.utcfromtimestamp(entry.begin.float_timestamp).replace(
                 tzinfo=pytz.utc
             )
-            end_date = datetime.utcfromtimestamp(entry.end.timestamp).replace(
+            end_date = datetime.utcfromtimestamp(entry.end.float_timestamp).replace(
                 tzinfo=pytz.utc
             )
-            title = re.sub(r"[\(\[].*?[\)\]]", "", entry.name)
+            title = re.sub(r"[\(\[].*?[\)\]]", "", entry.name) if entry.name else ""
 
             logger.debug("%s: Import even found: %s", feed, title)
 
@@ -373,7 +362,6 @@ def _import_ical(feed, event_ids_to_remove, url):
 
             # If we get the event from API it should not be removed
             if original:
-
                 logger.debug("%s: Event: %s already in database, skipping", feed, title)
 
                 # Remove the found fleet from the to be removed list
@@ -402,7 +390,7 @@ def _import_ical(feed, event_ids_to_remove, url):
                 )
                 event.save()
 
-    except Exception:
+    except (NotImplementedError, RequestException):
         logger.error("%s: Error in fetching fleets", feed, exc_info=True)
         return True
 
